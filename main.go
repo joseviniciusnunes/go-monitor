@@ -177,6 +177,9 @@ func collectMetrics(cfg Config) Metrics {
 	}
 
 	m.CPUTemperature = readCPUTemperature(cfg.SysfsRoot)
+	if cfg.verbose() {
+		logThermalZones(cfg.SysfsRoot + "/class/thermal")
+	}
 
 	if vm, err := mem.VirtualMemory(); err == nil {
 		m.RAMUsed = vm.Used
@@ -228,11 +231,19 @@ func readCPUTemperature(sysfsRoot string) float64 {
 	// 2) Zonas térmicas de CPU/SOC (Intel x86_pkg_temp, Rockchip RK3588, etc.).
 	thermalDir := sysfsRoot + "/class/thermal"
 	for _, zoneType := range []string{
-		"x86_pkg_temp", // Intel
-		"soc_thermal",  // Rockchip RK3588 (Orange Pi 4 Pro)
-		"cpu_thermal",  // Rockchip RK3588
-		"gpu_thermal",  // Rockchip RK3588
-		"npu_thermal",  // Rockchip RK3588
+		"x86_pkg_temp",       // Intel
+		"soc_thermal",        // Rockchip RK3588 (Orange Pi 4 Pro)
+		"cpu_thermal",        // Rockchip RK3588
+		"cpub_thermal_zone",  // Rockchip RK3588 (Orange Pi 4 Pro) - CPU big cores
+		"cpul_thermal_zone",  // Rockchip RK3588 (Orange Pi 4 Pro) - CPU little cores
+		"bigcore0_thermal",   // Rockchip RK3588
+		"bigcore1_thermal",   // Rockchip RK3588
+		"littlecore_thermal", // Rockchip RK3588
+		"center_thermal",     // Rockchip RK3588
+		"gpu_thermal",        // Rockchip RK3588
+		"gpu_thermal_zone",   // Orange Pi 4 Pro
+		"npu_thermal",        // Rockchip RK3588
+		"npu_thermal_zone",   // Orange Pi 4 Pro
 	} {
 		if t := findThermalZoneTemp(thermalDir, zoneType); t > 0 {
 			return t
@@ -244,6 +255,27 @@ func readCPUTemperature(sysfsRoot string) float64 {
 		return t
 	}
 	return 0
+}
+
+// logThermalZones lista as zonas térmicas disponíveis (para diagnóstico).
+func logThermalZones(thermalDir string) {
+	entries, err := os.ReadDir(thermalDir)
+	if err != nil {
+		log.Printf("ERRO: não foi possível ler %s: %v", thermalDir, err)
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "thermal_zone") {
+			continue
+		}
+		zone := thermalDir + "/" + e.Name()
+		typeData, err := os.ReadFile(zone + "/type")
+		if err != nil {
+			continue
+		}
+		temp := readTempMillidegrees(zone + "/temp")
+		log.Printf("Zona térmica %s: tipo=%s temp=%.1f°C", e.Name(), strings.TrimSpace(string(typeData)), temp)
+	}
 }
 
 // findSensorTemp procura em todos os hwmons um sensor com o nome dado
