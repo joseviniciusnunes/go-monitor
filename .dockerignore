@@ -1,0 +1,16 @@
+# Dependências e binários
+go-monitor
+*.exe
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE
+.vscode
+.idea

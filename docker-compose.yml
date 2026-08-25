@@ -1,0 +1,23 @@
+services:
+  go-monitor:
+    image: ghcr.io/joseviniciusnunes/go-monitor:latest
+    container_name: go-monitor
+    restart: unless-stopped
+    environment:
+      MQTT_BROKER: "tcp://192.168.1.100:1883"
+      MQTT_USER: "admin"
+      MQTT_PASSWORD: "*******"
+      MQTT_TOPIC: "/homeassistant/go-monitor/metrics"
+      PUBLISH_INTERVAL: "3"
+      # Nível de log: "error" (só erros) ou "verbose" (tudo)
+      LOG_LEVEL: "error"
+      # Caminhos do host montados no container
+      SYSFS_ROOT: "/host/sys"
+      DISK_PATH: "/host/root"
+    volumes:
+      # Monta o sysfs do host para ler a temperatura da CPU
+      - /sys:/host/sys:ro
+      # Monta a raiz do host para ler o uso do disco
+      - /:/host/root:ro
+    # Modo host para que as métricas reflitam o host (não o container)
+    network_mode: host
