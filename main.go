@@ -183,20 +183,22 @@ func publishDiscovery(client mqtt.Client, cfg Config) {
 	// Identificador único do dispositivo (usa o nome + hostname).
 	deviceID := "go-monitor-" + sanitizeID(hostnameOr("host"))
 
-	// Cada sensor é um par (nome, chave do JSON nas métricas).
+	// Cada sensor é um par (nome, chave do JSON nas métricas) e o template
+	// do valor formatado exibido nos atributos.
 	sensors := []struct {
-		name string
-		key  string
-		unit string
-		icon string
+		name      string
+		key       string
+		unit      string
+		icon      string
+		formatted string // template do valor formatado (ex.: "{{ value_json.ram_used_formatted }}")
 	}{
-		{"CPU Temperature", "cpu_temperature", "°C", "mdi:thermometer"},
-		{"RAM Used", "ram_used", "B", "mdi:memory"},
-		{"RAM Total", "ram_total", "B", "mdi:memory"},
-		{"RAM Percent", "ram_percent", "%", "mdi:memory"},
-		{"Disk Used", "disk_used", "B", "mdi:harddisk"},
-		{"Disk Total", "disk_total", "B", "mdi:harddisk"},
-		{"Disk Percent", "disk_percent", "%", "mdi:harddisk"},
+		{"CPU Temperature", "cpu_temperature", "°C", "mdi:thermometer", "{{ value_json.cpu_temperature }}°C"},
+		{"RAM Used", "ram_used", "B", "mdi:memory", "{{ value_json.ram_used_formatted }}"},
+		{"RAM Total", "ram_total", "B", "mdi:memory", "{{ value_json.ram_total_formatted }}"},
+		{"RAM Percent", "ram_percent", "%", "mdi:memory", "{{ value_json.ram_percent }}%"},
+		{"Disk Used", "disk_used", "B", "mdi:harddisk", "{{ value_json.disk_used_formatted }}"},
+		{"Disk Total", "disk_total", "B", "mdi:harddisk", "{{ value_json.disk_total_formatted }}"},
+		{"Disk Percent", "disk_percent", "%", "mdi:harddisk", "{{ value_json.disk_percent }}%"},
 	}
 
 	for _, s := range sensors {
@@ -211,6 +213,9 @@ func publishDiscovery(client mqtt.Client, cfg Config) {
 			"value_template":      "{{ value_json." + s.key + " }}",
 			"unit_of_measurement": s.unit,
 			"icon":                s.icon,
+			// Atributos: valor formatado e data da última leitura.
+			"json_attributes_topic":    cfg.Topic,
+			"json_attributes_template": fmt.Sprintf("{\"formatted\": \"%s\", \"last_reading\": \"{{ value_json.timestamp | timestamp_local }}\"}", s.formatted),
 			"device": map[string]any{
 				"identifiers":  []string{deviceID},
 				"name":         cfg.DeviceName,
