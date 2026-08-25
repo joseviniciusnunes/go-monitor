@@ -21,3 +21,5 @@ services:
       - /:/host/root:ro
     # Modo host para que as métricas reflitam o host (não o container)
     network_mode: host
+    # Necessário para ler o sysfs do host (temperatura da CPU)
+    privileged: true

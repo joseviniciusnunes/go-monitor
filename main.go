@@ -254,6 +254,10 @@ func readCPUTemperature(sysfsRoot string) float64 {
 	if t := firstThermalZoneTemp(thermalDir); t > 0 {
 		return t
 	}
+	// Se chegou aqui, não conseguiu ler nenhuma zona térmica.
+	if _, err := os.ReadDir(thermalDir); err != nil {
+		log.Printf("ERRO: não foi possível ler %s: %v", thermalDir, err)
+	}
 	return 0
 }
 
