@@ -177,7 +177,6 @@ func collectMetrics(cfg Config) Metrics {
 	}
 
 	m.CPUTemperature = readCPUTemperature(cfg.SysfsRoot)
-	log.Printf("Temperatura CPU: %.1f°C (sysfs=%s)", m.CPUTemperature, cfg.SysfsRoot)
 	if cfg.verbose() {
 		logThermalZones(cfg.SysfsRoot + "/class/thermal")
 	}
@@ -255,10 +254,6 @@ func readCPUTemperature(sysfsRoot string) float64 {
 	if t := firstThermalZoneTemp(thermalDir); t > 0 {
 		return t
 	}
-	// Se chegou aqui, não conseguiu ler nenhuma zona térmica.
-	if _, err := os.ReadDir(thermalDir); err != nil {
-		log.Printf("ERRO: não foi possível ler %s: %v", thermalDir, err)
-	}
 	return 0
 }
 
@@ -270,10 +265,16 @@ func logThermalZones(thermalDir string) {
 		return
 	}
 	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "thermal_zone") {
+		if !strings.HasPrefix(e.Name(), "thermal_zone") {
 			continue
 		}
 		zone := thermalDir + "/" + e.Name()
+
+		// O sysfs segue symlinks; para o alvo para verificar se é diretório.
+		info, err := os.Stat(zone)
+		if err != nil || !info.IsDir() {
+			continue
+		}
 		typeData, err := os.ReadFile(zone + "/type")
 		if err != nil {
 			continue
@@ -333,10 +334,16 @@ func findThermalZoneTemp(thermalDir, zoneType string) float64 {
 	}
 
 	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "thermal_zone") {
+		if !strings.HasPrefix(e.Name(), "thermal_zone") {
 			continue
 		}
 		zone := thermalDir + "/" + e.Name()
+
+		// Segue symlinks (no sysfs, thermal_zoneN são links para diretórios).
+		info, err := os.Stat(zone)
+		if err != nil || !info.IsDir() {
+			continue
+		}
 
 		typeData, err := os.ReadFile(zone + "/type")
 		if err != nil {
@@ -359,10 +366,16 @@ func firstThermalZoneTemp(thermalDir string) float64 {
 	}
 
 	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "thermal_zone") {
+		if !strings.HasPrefix(e.Name(), "thermal_zone") {
 			continue
 		}
 		zone := thermalDir + "/" + e.Name()
+
+		// O sysfs usa symlinks; segue o alvo, não o link.
+		info, err := os.Stat(zone)
+		if err != nil || !info.IsDir() {
+			continue
+		}
 		if t := readTempMillidegrees(zone + "/temp"); t > 0 {
 			return t
 		}
