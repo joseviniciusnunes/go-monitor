@@ -14,6 +14,10 @@ services:
       # Caminhos do host montados no container
       SYSFS_ROOT: "/sys"
       DISK_PATH: "/host/root"
+      # Prefixo do MQTT discovery do Home Assistant
+      DISCOVERY_PREFIX: "homeassistant"
+      # Nome do dispositivo exibido no Home Assistant
+      DEVICE_NAME: "Orange Pi 4 Pro"
     volumes:
       # Monta a raiz do host para ler o uso do disco
       - /:/host/root:ro

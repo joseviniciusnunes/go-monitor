@@ -51,8 +51,8 @@ Toda a configuração é feita por **variáveis de ambiente**:
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
 | `MQTT_BROKER` | `tcp://192.168.1.100:1883` | Endereço do broker MQTT |
-| `MQTT_USER` | `admin` | Usuário do broker |
-| `MQTT_PASSWORD` | `10203040` | Senha do broker |
+| `MQTT_USER` | Usuário do broker |
+| `MQTT_PASSWORD` | Senha do broker |
 | `MQTT_TOPIC` | `/homeassistant/go-monitor/metrisc` | Tópico de publicação |
 | `PUBLISH_INTERVAL` | `60` | Intervalo de publicação (segundos) |
 | `LOG_LEVEL` | `error` | Nível de log: `error` ou `verbose` |
@@ -131,7 +131,7 @@ docker run -d \
   --network host \
   -e MQTT_BROKER="tcp://192.168.1.100:1883" \
   -e MQTT_USER="admin" \
-  -e MQTT_PASSWORD="10203040" \
+  -e MQTT_PASSWORD="********" \
   -e MQTT_TOPIC="/homeassistant/go-monitor/metrics" \
   -e PUBLISH_INTERVAL="60" \
   -e LOG_LEVEL="error" \

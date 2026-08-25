@@ -35,19 +35,25 @@ type Config struct {
 	SysfsRoot string
 	// DiskPath é o caminho da partição a monitorar (ex.: /host/root).
 	DiskPath string
+	// DiscoveryPrefix é o prefixo do MQTT discovery do Home Assistant (ex.: homeassistant).
+	DiscoveryPrefix string
+	// DeviceName é o nome do dispositivo exibido no Home Assistant.
+	DeviceName string
 }
 
 // loadConfig lê as configurações de variáveis de ambiente.
 func loadConfig() Config {
 	return Config{
 		Broker:          getEnv("MQTT_BROKER", "tcp://192.168.1.100:1883"),
-		User:            getEnv("MQTT_USER", "admin"),
-		Password:        getEnv("MQTT_PASSWORD", "10203040"),
+		User:            getEnv("MQTT_USER", ""),
+		Password:        getEnv("MQTT_PASSWORD", ""),
 		Topic:           getEnv("MQTT_TOPIC", "/homeassistant/go-monitor/metrisc"),
 		PublishInterval: time.Duration(getEnvInt("PUBLISH_INTERVAL", 60)) * time.Second,
 		LogLevel:        getEnv("LOG_LEVEL", logLevelError),
 		SysfsRoot:       getEnv("SYSFS_ROOT", "/sys"),
 		DiskPath:        getEnv("DISK_PATH", "/"),
+		DiscoveryPrefix: getEnv("DISCOVERY_PREFIX", "homeassistant"),
+		DeviceName:      getEnv("DEVICE_NAME", "Go Monitor"),
 	}
 }
 
@@ -111,6 +117,9 @@ func main() {
 	}
 	defer client.Disconnect(250)
 
+	// Publica o discovery do Home Assistant para os sensores.
+	publishDiscovery(client, cfg)
+
 	// Publica imediatamente e depois a cada intervalo configurado.
 	publish(client, cfg)
 
@@ -135,7 +144,7 @@ func main() {
 func newMQTTClient(cfg Config) mqtt.Client {
 	opts := mqtt.NewClientOptions().
 		AddBroker(cfg.Broker).
-		SetClientID("go-monitor").
+		SetClientID("go-monitor-" + sanitizeID(cfg.DeviceName)).
 		SetUsername(cfg.User).
 		SetPassword(cfg.Password).
 		SetAutoReconnect(true).
@@ -166,6 +175,85 @@ func publish(client mqtt.Client, cfg Config) {
 		return
 	}
 	cfg.logInfo("Métricas publicadas em %s", cfg.Topic)
+}
+
+// publishDiscovery publica os configs de discovery do Home Assistant
+// para cada sensor, permitindo que o HA os descubra automaticamente.
+func publishDiscovery(client mqtt.Client, cfg Config) {
+	// Identificador único do dispositivo (usa o nome + hostname).
+	deviceID := "go-monitor-" + sanitizeID(hostnameOr("host"))
+
+	// Cada sensor é um par (nome, chave do JSON nas métricas).
+	sensors := []struct {
+		name string
+		key  string
+		unit string
+		icon string
+	}{
+		{"CPU Temperature", "cpu_temperature", "°C", "mdi:thermometer"},
+		{"RAM Used", "ram_used", "B", "mdi:memory"},
+		{"RAM Total", "ram_total", "B", "mdi:memory"},
+		{"RAM Percent", "ram_percent", "%", "mdi:memory"},
+		{"Disk Used", "disk_used", "B", "mdi:harddisk"},
+		{"Disk Total", "disk_total", "B", "mdi:harddisk"},
+		{"Disk Percent", "disk_percent", "%", "mdi:harddisk"},
+	}
+
+	for _, s := range sensors {
+		// Tópico de discovery: <prefix>/sensor/<device_id>/<object_id>/config
+		objectID := sanitizeID(s.name)
+		topic := fmt.Sprintf("%s/sensor/%s/%s/config", cfg.DiscoveryPrefix, deviceID, objectID)
+
+		payload := map[string]any{
+			"name":                s.name,
+			"unique_id":           deviceID + "_" + objectID,
+			"state_topic":         cfg.Topic,
+			"value_template":      "{{ value_json." + s.key + " }}",
+			"unit_of_measurement": s.unit,
+			"icon":                s.icon,
+			"device": map[string]any{
+				"identifiers":  []string{deviceID},
+				"name":         cfg.DeviceName,
+				"manufacturer": "go-monitor",
+				"model":        "Orange Pi 4 Pro",
+			},
+		}
+
+		data, err := json.Marshal(payload)
+		if err != nil {
+			cfg.logError("Erro ao serializar discovery de %s: %v", s.name, err)
+			continue
+		}
+
+		token := client.Publish(topic, 0, true, data)
+		token.Wait()
+		if token.Error() != nil {
+			cfg.logError("Erro ao publicar discovery de %s: %v", s.name, token.Error())
+			continue
+		}
+		cfg.logInfo("Discovery publicado para %s em %s", s.name, topic)
+	}
+}
+
+// hostnameOr retorna o hostname do sistema ou um fallback.
+func hostnameOr(fallback string) string {
+	if hn, err := os.Hostname(); err == nil && hn != "" {
+		return hn
+	}
+	return fallback
+}
+
+// sanitizeID remove caracteres inválidos para IDs do Home Assistant.
+func sanitizeID(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 // collectMetrics coleta temperatura da CPU, uso de RAM e uso de disco.
