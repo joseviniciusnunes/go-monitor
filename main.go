@@ -177,6 +177,7 @@ func collectMetrics(cfg Config) Metrics {
 	}
 
 	m.CPUTemperature = readCPUTemperature(cfg.SysfsRoot)
+	log.Printf("Temperatura CPU: %.1f°C (sysfs=%s)", m.CPUTemperature, cfg.SysfsRoot)
 	if cfg.verbose() {
 		logThermalZones(cfg.SysfsRoot + "/class/thermal")
 	}
