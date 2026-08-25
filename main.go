@@ -217,7 +217,7 @@ func formatBytes(b uint64) string {
 // readCPUTemperature lê a temperatura da CPU diretamente do sysfs do host.
 // Retorna 0 se o sensor não estiver disponível.
 func readCPUTemperature(sysfsRoot string) float64 {
-	// Procura por sensores reais de CPU: k10temp (AMD) e coretemp (Intel).
+	// 1) Sensores de CPU em hwmon: k10temp (AMD) e coretemp (Intel).
 	if t := findSensorTemp(sysfsRoot+"/class/hwmon", "k10temp"); t > 0 {
 		return t
 	}
@@ -225,8 +225,22 @@ func readCPUTemperature(sysfsRoot string) float64 {
 		return t
 	}
 
-	// Fallback: thermal_zone do tipo x86_pkg_temp (pacote da CPU).
-	if t := findThermalZoneTemp(sysfsRoot + "/class/thermal"); t > 0 {
+	// 2) Zonas térmicas de CPU/SOC (Intel x86_pkg_temp, Rockchip RK3588, etc.).
+	thermalDir := sysfsRoot + "/class/thermal"
+	for _, zoneType := range []string{
+		"x86_pkg_temp", // Intel
+		"soc_thermal",  // Rockchip RK3588 (Orange Pi 4 Pro)
+		"cpu_thermal",  // Rockchip RK3588
+		"gpu_thermal",  // Rockchip RK3588
+		"npu_thermal",  // Rockchip RK3588
+	} {
+		if t := findThermalZoneTemp(thermalDir, zoneType); t > 0 {
+			return t
+		}
+	}
+
+	// 3) Fallback genérico: primeira zona térmica com temperatura válida.
+	if t := firstThermalZoneTemp(thermalDir); t > 0 {
 		return t
 	}
 	return 0
@@ -273,9 +287,9 @@ func findSensorTemp(hwmonDir, sensorName string) float64 {
 	return 0
 }
 
-// findThermalZoneTemp procura a zona térmica do pacote da CPU
-// (type == x86_pkg_temp) e retorna sua temperatura em graus Celsius.
-func findThermalZoneTemp(thermalDir string) float64 {
+// findThermalZoneTemp procura uma zona térmica com o tipo dado
+// (ex.: x86_pkg_temp, soc_thermal) e retorna sua temperatura em °C.
+func findThermalZoneTemp(thermalDir, zoneType string) float64 {
 	entries, err := os.ReadDir(thermalDir)
 	if err != nil {
 		return 0
@@ -291,10 +305,30 @@ func findThermalZoneTemp(thermalDir string) float64 {
 		if err != nil {
 			continue
 		}
-		if strings.TrimSpace(string(typeData)) != "x86_pkg_temp" {
+		if strings.TrimSpace(string(typeData)) != zoneType {
 			continue
 		}
 		return readTempMillidegrees(zone + "/temp")
+	}
+	return 0
+}
+
+// firstThermalZoneTemp retorna a temperatura da primeira zona térmica
+// que reportar um valor válido (fallback genérico).
+func firstThermalZoneTemp(thermalDir string) float64 {
+	entries, err := os.ReadDir(thermalDir)
+	if err != nil {
+		return 0
+	}
+
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "thermal_zone") {
+			continue
+		}
+		zone := thermalDir + "/" + e.Name()
+		if t := readTempMillidegrees(zone + "/temp"); t > 0 {
+			return t
+		}
 	}
 	return 0
 }
