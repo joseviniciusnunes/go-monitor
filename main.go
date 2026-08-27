@@ -213,6 +213,8 @@ func publishDiscovery(client mqtt.Client, cfg Config) {
 			"value_template":      "{{ value_json." + s.key + " }}",
 			"unit_of_measurement": s.unit,
 			"icon":                s.icon,
+			// Necessário para que o HA registre estatísticas de longo prazo.
+			"state_class": "measurement",
 			// Atributos: valor formatado e data da última leitura.
 			"json_attributes_topic":    cfg.Topic,
 			"json_attributes_template": fmt.Sprintf("{\"formatted\": \"%s\", \"last_reading\": \"{{ value_json.timestamp | timestamp_local }}\"}", s.formatted),
