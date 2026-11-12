@@ -8,6 +8,9 @@ on:
 env:
     REGISTRY: ghcr.io
     IMAGE_NAME: ${{ github.repository }}
+    # Versão do container: incremente a cada release.
+    # A imagem será publicada como ghcr.io/<org>/go-monitor:<VERSION>
+    VERSION: 1.0.0
 
 jobs:
     build:
@@ -39,14 +42,16 @@ jobs:
               with:
                   images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
                   tags: |
-                      type=raw,value=latest
+                      type=raw,value=${{ env.VERSION }}
                       type=sha
 
-            - name: Build e push (ARM64 - Orange Pi 4 Pro)
+            - name: Build e push (multi-arquitetura)
               uses: docker/build-push-action@v6
               with:
                   context: .
-                  platforms: linux/arm64
+                  # ARM64 = Orange Pi 4 Pro (RK3588)
+                  # ARM/v7 = Orange Pi PC Plus (Allwinner H3)
+                  platforms: linux/arm64,linux/arm/v7
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
