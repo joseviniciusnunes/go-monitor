@@ -57,7 +57,7 @@ func loadConfig() Config {
 		Broker:          getEnv("MQTT_BROKER", "tcp://192.168.1.100:1883"),
 		User:            getEnv("MQTT_USER", ""),
 		Password:        getEnv("MQTT_PASSWORD", ""),
-		Topic:           getEnv("MQTT_TOPIC", "/homeassistant/go-monitor/"+monitorID+"/metrics"),
+		Topic:           "/homeassistant/go-monitor/" + monitorID + "/metrics",
 		PublishInterval: time.Duration(getEnvInt("PUBLISH_INTERVAL", 60)) * time.Second,
 		LogLevel:        getEnv("LOG_LEVEL", logLevelError),
 		SysfsRoot:       getEnv("SYSFS_ROOT", "/sys"),
