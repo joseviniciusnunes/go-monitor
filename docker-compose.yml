@@ -1,13 +1,26 @@
 services:
   go-monitor:
-    image: ghcr.io/joseviniciusnunes/go-monitor:latest
+    # Imagem multi-arquitetura (amd64 + arm/v7 + arm64). Se sua infraestrutura não
+    # puder usar buildx multi-arch automaticamente, force a plataforma do
+    # Orange Pi PC Plus (Allwinner H3, ARMv7): platform: linux/arm/v7
+    # platform: linux/arm/v7
+    # Tag da imagem: mantenha em sincronia com a VERSION do build.yml
+    image: ghcr.io/joseviniciusnunes/go-monitor:1.0.0
     container_name: go-monitor
     restart: unless-stopped
     environment:
       MQTT_BROKER: "tcp://192.168.1.100:1883"
       MQTT_USER: "admin"
       MQTT_PASSWORD: "*******"
-      MQTT_TOPIC: "/homeassistant/go-monitor/metrics"
+      # MONITOR_ID: identificador ÚNICO desta instância. Gera o tópico MQTT,
+      # o ID do dispositivo no Home Assistant e o client ID do broker.
+      # Se tiver DOIS go-monitor na rede, defina um valor diferente em cada um:
+      #   placa A: MONITOR_ID: "orange-pi-4-pro"
+      #   placa B: MONITOR_ID: "orange-pi-pc-plus"
+      # Se não for definido aqui, o tópico usa o default "default".
+      MONITOR_ID: "orange-pi-4-pro"
+      # Se quiser um tópico específico, descomente e ajuste:
+      # MQTT_TOPIC: "/homeassistant/go-monitor/${MONITOR_ID}/metrics"
       PUBLISH_INTERVAL: "3"
       # Nível de log: "error" (só erros) ou "verbose" (tudo)
       LOG_LEVEL: "error"

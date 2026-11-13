@@ -39,21 +39,32 @@ type Config struct {
 	DiscoveryPrefix string
 	// DeviceName é o nome do dispositivo exibido no Home Assistant.
 	DeviceName string
+	// MonitorID é o identificador ÚNICO da instância. Usado para gerar o tópico
+	// MQTT padrão, o ID do dispositivo no HA e o client ID do broker.
+	// Deve ser diferente para cada monitor rodando na mesma rede.
+	MonitorID string
 }
 
 // loadConfig lê as configurações de variáveis de ambiente.
 func loadConfig() Config {
+	// Identificador único da instância. Se não definido, deriva do DEVICE_NAME.
+	monitorID := sanitizeID(getEnv("MONITOR_ID", getEnv("DEVICE_NAME", "default")))
+	if monitorID == "" {
+		monitorID = "default"
+	}
+
 	return Config{
 		Broker:          getEnv("MQTT_BROKER", "tcp://192.168.1.100:1883"),
 		User:            getEnv("MQTT_USER", ""),
 		Password:        getEnv("MQTT_PASSWORD", ""),
-		Topic:           getEnv("MQTT_TOPIC", "/homeassistant/go-monitor/metrisc"),
+		Topic:           getEnv("MQTT_TOPIC", "/homeassistant/go-monitor/"+monitorID+"/metrics"),
 		PublishInterval: time.Duration(getEnvInt("PUBLISH_INTERVAL", 60)) * time.Second,
 		LogLevel:        getEnv("LOG_LEVEL", logLevelError),
 		SysfsRoot:       getEnv("SYSFS_ROOT", "/sys"),
 		DiskPath:        getEnv("DISK_PATH", "/"),
 		DiscoveryPrefix: getEnv("DISCOVERY_PREFIX", "homeassistant"),
 		DeviceName:      getEnv("DEVICE_NAME", "Go Monitor"),
+		MonitorID:       monitorID,
 	}
 }
 
@@ -144,7 +155,7 @@ func main() {
 func newMQTTClient(cfg Config) mqtt.Client {
 	opts := mqtt.NewClientOptions().
 		AddBroker(cfg.Broker).
-		SetClientID("go-monitor-" + sanitizeID(cfg.DeviceName)).
+		SetClientID("go-monitor-" + cfg.MonitorID).
 		SetUsername(cfg.User).
 		SetPassword(cfg.Password).
 		SetAutoReconnect(true).
@@ -180,8 +191,9 @@ func publish(client mqtt.Client, cfg Config) {
 // publishDiscovery publica os configs de discovery do Home Assistant
 // para cada sensor, permitindo que o HA os descubra automaticamente.
 func publishDiscovery(client mqtt.Client, cfg Config) {
-	// Identificador único do dispositivo (usa o nome + hostname).
-	deviceID := "go-monitor-" + sanitizeID(hostnameOr("host"))
+	// Identificador ÚNICO do dispositivo por instância, derivado do
+	// MONITOR_ID (variável de ambiente que deve ser única por monitor).
+	deviceID := "go-monitor-" + cfg.MonitorID
 
 	// Cada sensor é um par (nome, chave do JSON nas métricas) e o template
 	// do valor formatado exibido nos atributos.
@@ -222,7 +234,7 @@ func publishDiscovery(client mqtt.Client, cfg Config) {
 				"identifiers":  []string{deviceID},
 				"name":         cfg.DeviceName,
 				"manufacturer": "go-monitor",
-				"model":        "Orange Pi 4 Pro",
+				"model":        cfg.DeviceName,
 			},
 		}
 
@@ -240,14 +252,6 @@ func publishDiscovery(client mqtt.Client, cfg Config) {
 		}
 		cfg.logInfo("Discovery publicado para %s em %s", s.name, topic)
 	}
-}
-
-// hostnameOr retorna o hostname do sistema ou um fallback.
-func hostnameOr(fallback string) string {
-	if hn, err := os.Hostname(); err == nil && hn != "" {
-		return hn
-	}
-	return fallback
 }
 
 // sanitizeID remove caracteres inválidos para IDs do Home Assistant.
@@ -339,6 +343,10 @@ func readCPUTemperature(sysfsRoot string) float64 {
 		"gpu_thermal_zone",   // Orange Pi 4 Pro
 		"npu_thermal",        // Rockchip RK3588
 		"npu_thermal_zone",   // Orange Pi 4 Pro
+		"cpu-thermal",        // Allwinner H3 (Orange Pi PC Plus) - kernel mainline
+		"soc-thermal",        // Allwinner H3
+		"cpu",                // Allwinner H3 (H3 BSP/kernel 4.x)
+		"soc",                // Allwinner H3
 	} {
 		if t := findThermalZoneTemp(thermalDir, zoneType); t > 0 {
 			return t

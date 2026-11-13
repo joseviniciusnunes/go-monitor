@@ -10,7 +10,7 @@ env:
     IMAGE_NAME: ${{ github.repository }}
     # Versão do container: incremente a cada release.
     # A imagem será publicada como ghcr.io/<org>/go-monitor:<VERSION>
-    VERSION: 1.0.0
+    VERSION: 2.0.0
 
 jobs:
     build:

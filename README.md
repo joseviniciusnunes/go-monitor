@@ -2,7 +2,7 @@
 
 Monitor de sistema leve escrito em Go que publica métricas de **temperatura da CPU**, **uso de memória RAM** e **uso de disco** via **MQTT** a cada intervalo configurável.
 
-Projetado para rodar em um container Docker e coletar métricas do **host** (não do container), ideal para dispositivos como o **Orange Pi 4 Pro**.
+Projetado para rodar em um container Docker e coletar métricas do **host** (não do container), ideal para dispositivos como o **Orange Pi 4 Pro** (Rockchip RK3588) e o **Orange Pi PC Plus** (Allwinner H3).
 
 ## 📦 Funcionalidades
 
@@ -100,11 +100,30 @@ As métricas são publicadas como **JSON** no tópico MQTT:
 
 ## 🐳 Docker
 
+### Arquiteturas suportadas
+
+A imagem é **multi-arquitetura**:
+
+| Arquitetura | Dispositivo |
+| --- | --- |
+| `linux/amd64` | PCs/notebooks x86_64 |
+| `linux/arm64` | Orange Pi 4 Pro, Raspberry Pi 64-bit |
+| `linux/arm/v7` | **Orange Pi PC Plus (Allwinner H3)** e demais ARM 32-bit |
+
+Para buildar e publicar todas de uma vez, use o **buildx**:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 \
+  -t ghcr.io/seuanjo/go-monitor:latest --push .
+```
+
+DICA: se você builda/puxa a imagem **no próprio Orange Pi PC Plus**, o Docker já resolve automaticamente para `linux/arm/v7` — não precisa configurar nada.
+
 ### Dockerfile
 
 Build em **multi-stage**:
 
-1. **Builder** — compila um binário estático com `CGO_ENABLED=0` e `-ldflags="-s -w"`
+1. **Builder** — compila um binário estático com `CGO_ENABLED=0` e `-ldflags="-s -w"`, usando `TARGETARCH`/`TARGETVARIANT` do buildx para a arquitetura correta
 2. **Final** — imagem `scratch` mínima (~10MB), sem shell ou ferramentas
 
 ### docker-compose.yml
@@ -113,10 +132,29 @@ O container monta o sysfs e a raiz do host para coletar métricas reais:
 
 ```yaml
 volumes:
-  - /sys:/host/sys:ro   # temperatura da CPU
   - /:/host/root:ro     # uso do disco
 network_mode: host      # métricas refletem o host
 ```
+
+> **ATENÇÃO**: o sysfs (`/sys`) é montado **automaticamente** pelo Docker no container, então a temperatura usa `SYSFS_ROOT=/sys` padrão e não precisa de volume extra. Se em modo `verbose` a temperatura vier `0`, use o diagnóstico abaixo.
+
+## 🔍 Diagnóstico do sensor de temperatura no Orange Pi PC Plus
+
+O Allwinner H3 expõe a temperatura via **zona térmica** do sysfs. O nome do tipo varia conforme o kernel:
+
+| Kernel | Caminho esperado | `type` |
+| --- | --- | --- |
+| Mainline (Armbian) | `/sys/class/thermal/thermal_zone0/type` | `cpu-thermal` |
+| BSP / kernel 4.x | `/sys/class/thermal/thermal_zone0/type` | `cpu` ou `soc` |
+
+O monitor já busca `cpu-thermal`, `soc-thermal`, `cpu` e `soc`. Se a leitura vier `0`, rode no host:
+
+```bash
+cat /sys/class/thermal/thermal_zone*/type
+cat /sys/class/thermal/thermal_zone*/temp
+```
+
+E então ajuste `SYSFS_ROOT`/zona no `docker-compose.yml` se necessário. Em modo `LOG_LEVEL=verbose` o monitor lista todas as zonas térmicas com tipo e temperatura — útil para depurar.
 
 ## 🏗️ Build para Orange Pi 4 Pro
 
